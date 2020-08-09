@@ -1,0 +1,74 @@
+name: product
+
+on:
+  schedule:
+      - cron: '0 1/8 * * *'
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    
+jobs:
+  generate:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        repository: karanokk/FGODumper
+        token: ${{ secrets.GITHUB_PAT }}
+    - name: Get version gist
+      id: ver_gist
+      uses: andymckay/get-gist-action@master
+      with:
+        gistURL: "https://gist.github.com/karanokk/6349188b9b8b9bcfba03380c616969e7"
+    - name: Get key gist
+      id: key_gist
+      uses: andymckay/get-gist-action@master
+      with:
+        gistURL: "https://gist.github.com/karanokk/dd8bd3e7875831b5f295bf0c1a91392a"
+    - run: |
+      id: product
+        nuget restore FGODumper.sln;
+        dotnet build --configuration Release FGODumper;
+        $masterJsonPath = '.\master.json';
+        .\FGODumper\bin\Release\FGODumper.exe ${{ steps.ver_gist.outputs.file }} ${{ steps.key_gist.outputs.file }}
+        $isUpdated = Test-Path $masterJsonPath;
+        if ($isUpdated) { Compress-Archive -Path $masterJsonPath -DestinationPath '.\master.zip'; }
+        echo "::set-output name=isUpdated::$isUpdated";
+      shell: powershell
+    - name: Set version
+      id: vars
+      run: |
+        $ver = (Get-Content ${{ steps.ver_gist.outputs.file }}) | ConvertFrom-Json;
+        $dataVer = $ver.dataVer;
+        echo "::set-output name=ver::${dataVer}";
+      shell: powershell
+    - name: Create Release
+      id: create_release
+      if: steps.product.outputs.isUpdated == 'true'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.vars.outputs.ver }}
+        release_name: MasterData ${{ steps.vars.outputs.ver }}
+        draft: false
+        prerelease: false
+    - name: Upload Release Asset
+      if: steps.product.outputs.isUpdated == 'true'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: .\masterdata.zip
+        asset_name: masterdata.zip
+        asset_content_type: application/zip
+    - name: Update appVer Gist
+      if: steps.product.outputs.isUpdated == 'true'
+      uses: andymckay/append-gist-action@master
+      with:
+        gistURL: "https://gist.github.com/karanokk/6349188b9b8b9bcfba03380c616969e7"
+        token: ${{ secrets.GIST_PAT }}
+        file: ${{ steps.ver_gist.outputs.file }}
+          
