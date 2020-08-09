@@ -15,7 +15,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         repository: karanokk/FGODumper
-        token: ${{ secrets.GITHUB_PAT }}
+        token: ${{ secrets.REPO_PAT }}
     - name: Get version gist
       id: ver_gist
       uses: andymckay/get-gist-action@master
