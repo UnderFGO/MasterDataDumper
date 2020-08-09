@@ -18,18 +18,21 @@ jobs:
         token: ${{ secrets.REPO_PAT }}
     - name: Get version gist
       id: verGist
-      uses: andymckay/get-gist-action@master
-      with:
-        gistURL: "https://gist.github.com/karanokk/6349188b9b8b9bcfba03380c616969e7"
+      run: |
+        $appVerJson = (curl https://api.github.com/gists/6349188b9b8b9bcfba03380c616969e7 | ConvertFrom-Json);
+        $filePath = ".\fgo_jp_ver.json";
+        $appVerJson.files.'fgo_jp_ver.json'.content | out-file -filepath $filePath;
+        echo "::set-output name=file::$filePath";
+      shell: powershell
     - id: product
       run: |
         nuget restore FGODumper.sln;
         dotnet build --configuration Release FGODumper;
         $masterJsonPath = '.\master.json';
-        .\FGODumper\bin\Release\FGODumper.exe ${{ steps.verGist.outputs.file }}
+        & ".\FGODumper\bin\Release\FGODumper.exe" "${{ steps.verGist.outputs.file }}"
         $isUpdated = Test-Path $masterJsonPath;
         if ($isUpdated) { Compress-Archive -Path $masterJsonPath -DestinationPath '.\master.zip'; }
-        echo "::set-output name=isUpdated::$isUpdated";
+        echo "::set-output name=isUpdated::${isUpdated}";
       shell: powershell
     - name: Set version
       id: vars
@@ -40,7 +43,7 @@ jobs:
       shell: powershell
     - name: Create Release
       id: create_release
-      if: steps.product.outputs.isUpdated == 'true'
+      if: steps.product.outputs.isUpdated == 'True'
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +53,7 @@ jobs:
         draft: false
         prerelease: false
     - name: Upload Release Asset
-      if: steps.product.outputs.isUpdated == 'true'
+      if: steps.product.outputs.isUpdated == 'True'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,7 +63,7 @@ jobs:
         asset_name: masterdata.zip
         asset_content_type: application/zip
     - name: Update appVer Gist
-      if: steps.product.outputs.isUpdated == 'true'
+      if: steps.product.outputs.isUpdated == 'True'
       uses: andymckay/append-gist-action@master
       with:
         gistURL: "https://gist.github.com/karanokk/6349188b9b8b9bcfba03380c616969e7"
