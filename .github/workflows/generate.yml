@@ -17,21 +17,16 @@ jobs:
         repository: karanokk/FGODumper
         token: ${{ secrets.REPO_PAT }}
     - name: Get version gist
-      id: ver_gist
+      id: verGist
       uses: andymckay/get-gist-action@master
       with:
         gistURL: "https://gist.github.com/karanokk/6349188b9b8b9bcfba03380c616969e7"
-    - name: Get key gist
-      id: key_gist
-      uses: andymckay/get-gist-action@master
-      with:
-        gistURL: "https://gist.github.com/karanokk/dd8bd3e7875831b5f295bf0c1a91392a"
-    - run: |
-      id: product
+    - id: product
+      run: |
         nuget restore FGODumper.sln;
         dotnet build --configuration Release FGODumper;
         $masterJsonPath = '.\master.json';
-        .\FGODumper\bin\Release\FGODumper.exe ${{ steps.ver_gist.outputs.file }} ${{ steps.key_gist.outputs.file }}
+        .\FGODumper\bin\Release\FGODumper.exe ${{ steps.verGist.outputs.file }}
         $isUpdated = Test-Path $masterJsonPath;
         if ($isUpdated) { Compress-Archive -Path $masterJsonPath -DestinationPath '.\master.zip'; }
         echo "::set-output name=isUpdated::$isUpdated";
@@ -39,7 +34,7 @@ jobs:
     - name: Set version
       id: vars
       run: |
-        $ver = (Get-Content ${{ steps.ver_gist.outputs.file }}) | ConvertFrom-Json;
+        $ver = (Get-Content ${{ steps.verGist.outputs.file }}) | ConvertFrom-Json;
         $dataVer = $ver.dataVer;
         echo "::set-output name=ver::${dataVer}";
       shell: powershell
@@ -70,5 +65,5 @@ jobs:
       with:
         gistURL: "https://gist.github.com/karanokk/6349188b9b8b9bcfba03380c616969e7"
         token: ${{ secrets.GIST_PAT }}
-        file: ${{ steps.ver_gist.outputs.file }}
+        file: ${{ steps.verGist.outputs.file }}
           
