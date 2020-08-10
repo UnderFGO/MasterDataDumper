@@ -40,7 +40,8 @@ jobs:
       run: |
         $ver = (Get-Content ${{ steps.verGist.outputs.file }}) | ConvertFrom-Json;
         $dateVer = $ver.dateVer;
-        $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer+9*3600);
+        $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer+9*3600)
+        $updatedAt = Get-Date $updatedDate -UFormat '%B %d, %Y %R'
         echo "::set-output name=ver::${dateVer}";
         echo "::set-output name=updatedAt::${updatedAt}";
       shell: powershell
@@ -54,7 +55,7 @@ jobs:
         tag_name: ${{ steps.vars.outputs.ver }}
         release_name: MasterData ${{ steps.vars.outputs.ver }}
         body: |
-          Updated on ${{ steps.vars.outputs.updatedAt }}
+          Updated on ${{ steps.vars.outputs.updatedAt }} UTC+9
         draft: false
         prerelease: false
     - name: Upload Release Asset
