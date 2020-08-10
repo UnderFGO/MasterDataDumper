@@ -35,11 +35,14 @@ jobs:
         echo "::set-output name=isUpdated::${isUpdated}";
       shell: powershell
     - name: Set version
+      if: steps.product.outputs.isUpdated == 'True'
       id: vars
       run: |
         $ver = (Get-Content ${{ steps.verGist.outputs.file }}) | ConvertFrom-Json;
-        $dataVer = $ver.dataVer;
-        echo "::set-output name=ver::${dataVer}";
+        $dateVer = $ver.dateVer;
+        $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer+9*3600);
+        echo "::set-output name=ver::${dateVer}";
+        echo "::set-output name=updatedAt::${updatedAt}";
       shell: powershell
     - name: Create Release
       id: create_release
@@ -50,6 +53,8 @@ jobs:
       with:
         tag_name: ${{ steps.vars.outputs.ver }}
         release_name: MasterData ${{ steps.vars.outputs.ver }}
+        body: |
+          Updated on ${{ steps.vars.outputs.updatedAt }}
         draft: false
         prerelease: false
     - name: Upload Release Asset
