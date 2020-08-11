@@ -9,23 +9,22 @@ jobs:
   dump:
     runs-on: windows-latest
 
+    env:
+      VERSION_KEY: game-data-version
+      VERSION_FILENAME: version_key.json
+      MASTER_FILENAME: master.zip
+
     steps:
     - uses: actions/checkout@v2
       with:
         repository: karanokk/FGODumper
         token: ${{ secrets.PRIVATE_REPO_PAT }}
-    
-    - name: Setup env
-      run: |
-        echo '::set-env name=version_key::game-data-version'
-        echo '::set-env name=version_filename::version_key.json'
-        echo '::set-env name=master_filename::master.zip'
-      shell: powershell
 
     - name: Download game data version
       uses: actions/download-artifact@v2
+      continue-on-error: true
       with:
-        name: $version_key
+        name: ${{ env.VERSION_KEY }}
 
     - name: Build & run FGODumper
       id: product
@@ -33,18 +32,18 @@ jobs:
         nuget restore FGODumper.sln
         dotnet build --configuration Release FGODumper
 
-        & '.\FGODumper\bin\Release\FGODumper.exe' $version_filename
+        & '.\FGODumper\bin\Release\FGODumper.exe' ${{ env.VERSION_FILENAME }}
 
         $masterPath = 'master.json'
         $isUpdated = Test-Path $masterPath
-        echo '::set-output name=isUpdated::${isUpdated}'
+        echo "::set-output name=isUpdated::${isUpdated}"
         if ($isUpdated) {
-          Compress-Archive -Path $masterPath -DestinationPath "${master_filename}"
+          Compress-Archive -Path $masterPath -DestinationPath ${{ env.MASTER_FILENAME}}
 
-          $versionJson = (Get-Content $version_filename) | ConvertFrom-Json
+          $versionJson = (Get-Content ${{ env.VERSION_FILENAME }}) | ConvertFrom-Json
           $dateVer = $versionJson.dateVer;
           $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer +9*3600)
-          $updatedAt = Get-Date $updatedDate -UFormat '%B %d, %Y %R'
+          $updatedAt = Get-Date $updatedAt -UFormat '%B %d, %Y %R'
           echo "::set-output name=ver::${dateVer}";
           echo "::set-output name=updatedAt::${updatedAt}";
         }
@@ -64,6 +63,7 @@ jobs:
         draft: false
         prerelease: false
 
+
     - name: Upload Release Asset
       if: steps.product.outputs.isUpdated == 'True'
       uses: actions/upload-release-asset@v1
@@ -71,14 +71,14 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: $master_filename
-        asset_name: $master_filename
+        asset_path: ${{ env.MASTER_FILENAME }}
+        asset_name: ${{ env.MASTER_FILENAME }}
         asset_content_type: application/zip
+
 
     - name: Upload game data version
       if: steps.product.outputs.isUpdated == 'True'
       uses: actions/upload-artifact@v2
       with:
-        name: $version_key
-        path: ${version_filename}
-          
+        name: ${{ env.VERSION_KEY }}
+        path: ${{ env.VERSION_FILENAME }}
