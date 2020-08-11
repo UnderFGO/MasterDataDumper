@@ -20,11 +20,11 @@ jobs:
         repository: karanokk/FGODumper
         token: ${{ secrets.PRIVATE_REPO_PAT }}
 
-    - name: Download game data version
-      uses: actions/download-artifact@v2
-      continue-on-error: true
+    - name: Cache game data version
+      uses: actions/cache@v2
       with:
-        name: ${{ env.VERSION_KEY }}
+        path: ${{ env.VERSION_FILENAME }}
+        key: ${{ runner.os }}-${{ env.VERSION_KEY }}
 
     - name: Build & run FGODumper
       id: product
@@ -63,7 +63,6 @@ jobs:
         draft: false
         prerelease: false
 
-
     - name: Upload Release Asset
       if: steps.product.outputs.isUpdated == 'True'
       uses: actions/upload-release-asset@v1
@@ -74,11 +73,3 @@ jobs:
         asset_path: ${{ env.MASTER_FILENAME }}
         asset_name: ${{ env.MASTER_FILENAME }}
         asset_content_type: application/zip
-
-
-    - name: Upload game data version
-      if: steps.product.outputs.isUpdated == 'True'
-      uses: actions/upload-artifact@v2
-      with:
-        name: ${{ env.VERSION_KEY }}
-        path: ${{ env.VERSION_FILENAME }}
