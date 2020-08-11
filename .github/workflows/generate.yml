@@ -20,10 +20,12 @@ jobs:
         repository: karanokk/FGODumper
         token: ${{ secrets.PRIVATE_REPO_PAT }}
 
-    - name: Cache game data version
+    - name: Cache version and dependencies
       uses: actions/cache@v2
       with:
-        path: ${{ env.VERSION_FILENAME }}
+        path: |
+          ${{ env.VERSION_FILENAME }}
+          packages
         key: ${{ runner.os }}-${{ env.VERSION_KEY }}
 
     - name: Build & run FGODumper
