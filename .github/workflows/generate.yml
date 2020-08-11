@@ -1,63 +1,69 @@
-name: product
+name: generate
 
 on:
   schedule:
       - cron: '0 0/1 * * *'
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-    
+  workflow_dispatch:
+
 jobs:
-  generate:
+  dump:
     runs-on: windows-latest
+
     steps:
     - uses: actions/checkout@v2
       with:
         repository: karanokk/FGODumper
-        token: ${{ secrets.REPO_PAT }}
-    - name: Get version gist
-      id: verGist
+        token: ${{ secrets.PRIVATE_REPO_PAT }}
+    
+    - name: Setup env
       run: |
-        $appVerJson = (curl https://api.github.com/gists/ccc68b2d68190230b82e6e8083bbfc98 | ConvertFrom-Json);
-        $filePath = "fgo_jp_ver.json";
-        $appVerJson.files.'fgo_jp_ver.json'.content | out-file -filepath $filePath;
-        echo "::set-output name=file::$filePath";
+        echo '::set-env name=version_key::game-data-version'
+        echo '::set-env name=version_filename::version_key.json'
+        echo '::set-env name=master_filename::master.zip'
       shell: powershell
-    - id: product
+
+    - name: Download game data version
+      uses: actions/download-artifact@v2
+      with:
+        name: $version_key
+
+    - name: Build & run FGODumper
+      id: product
       run: |
-        nuget restore FGODumper.sln;
-        dotnet build --configuration Release FGODumper;
-        $masterJsonPath = '.\master.json';
-        & ".\FGODumper\bin\Release\FGODumper.exe" "${{ steps.verGist.outputs.file }}"
-        $isUpdated = Test-Path $masterJsonPath;
-        if ($isUpdated) { Compress-Archive -Path $masterJsonPath -DestinationPath '.\masterdata.zip'; }
-        echo "::set-output name=isUpdated::${isUpdated}";
+        nuget restore FGODumper.sln
+        dotnet build --configuration Release FGODumper
+
+        & '.\FGODumper\bin\Release\FGODumper.exe' $version_filename
+
+        $masterPath = 'master.json'
+        $isUpdated = Test-Path $masterPath
+        echo '::set-output name=isUpdated::${isUpdated}'
+        if ($isUpdated) {
+          Compress-Archive -Path $masterPath -DestinationPath "${master_filename}"
+
+          $versionJson = (Get-Content $version_filename) | ConvertFrom-Json
+          $dateVer = $versionJson.dateVer;
+          $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer +9*3600)
+          $updatedAt = Get-Date $updatedDate -UFormat '%B %d, %Y %R'
+          echo "::set-output name=ver::${dateVer}";
+          echo "::set-output name=updatedAt::${updatedAt}";
+        }
       shell: powershell
-    - name: Set version
-      if: steps.product.outputs.isUpdated == 'True'
-      id: vars
-      run: |
-        $ver = (Get-Content ${{ steps.verGist.outputs.file }}) | ConvertFrom-Json;
-        $dateVer = $ver.dateVer;
-        $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer+9*3600)
-        $updatedAt = Get-Date $updatedDate -UFormat '%B %d, %Y %R'
-        echo "::set-output name=ver::${dateVer}";
-        echo "::set-output name=updatedAt::${updatedAt}";
-      shell: powershell
+    
     - name: Create Release
-      id: create_release
       if: steps.product.outputs.isUpdated == 'True'
+      id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.vars.outputs.ver }}
-        release_name: MasterData ${{ steps.vars.outputs.ver }}
+        tag_name: ${{ steps.product.outputs.ver }}
+        release_name: MasterData ${{ steps.product.outputs.ver }}
         body: |
-          Updated on ${{ steps.vars.outputs.updatedAt }} UTC+9
+          Updated on ${{ steps.product.outputs.updatedAt }} UTC+9
         draft: false
         prerelease: false
+
     - name: Upload Release Asset
       if: steps.product.outputs.isUpdated == 'True'
       uses: actions/upload-release-asset@v1
@@ -65,14 +71,14 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: .\masterdata.zip
-        asset_name: masterdata.zip
+        asset_path: $master_filename
+        asset_name: $master_filename
         asset_content_type: application/zip
-    - name: Update appVer Gist
+
+    - name: Upload game data version
       if: steps.product.outputs.isUpdated == 'True'
-      uses: andymckay/append-gist-action@master
+      uses: actions/upload-artifact@v2
       with:
-        gistURL: "https://gist.github.com/karanokk/ccc68b2d68190230b82e6e8083bbfc98"
-        token: ${{ secrets.GIST_PAT }}
-        file: ${{ steps.verGist.outputs.file }}
+        name: $version_key
+        path: ${version_filename}
           
