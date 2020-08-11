@@ -2,7 +2,7 @@ name: generate
 
 on:
   schedule:
-      - cron: '0 0/1 * * *'
+      - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,7 +11,8 @@ jobs:
 
     env:
       VERSION_KEY: game-data-version
-      VERSION_FILENAME: version_key.json
+      VERSION_FILENAME: fgo_game_data_version.json
+      VERSION_FILE_GIST_ID: ccc68b2d68190230b82e6e8083bbfc98
       MASTER_FILENAME: master.zip
 
     steps:
@@ -19,14 +20,13 @@ jobs:
       with:
         repository: karanokk/FGODumper
         token: ${{ secrets.PRIVATE_REPO_PAT }}
-
-    - name: Cache version and dependencies
-      uses: actions/cache@v2
-      with:
-        path: |
-          ${{ env.VERSION_FILENAME }}
-          packages
-        key: ${{ runner.os }}-${{ env.VERSION_KEY }}
+    
+    - name: Fetch latest release game data version
+      run: |
+        $gist_api_url = "https://api.github.com/gists/${{ env.VERSION_FILE_GIST_ID }}"
+        $gameDataJson = (curl $gist_api_url | ConvertFrom-Json)
+        $gameDataJson.files."${{ env.VERSION_FILENAME }}".content | out-file -filepath ${{ env.VERSION_FILENAME }}
+      shell: powershell
 
     - name: Build & run FGODumper
       id: product
@@ -34,7 +34,7 @@ jobs:
         nuget restore FGODumper.sln
         dotnet build --configuration Release FGODumper
 
-        & '.\FGODumper\bin\Release\FGODumper.exe' ${{ env.VERSION_FILENAME }}
+        & '.\FGODumper\bin\Release\FGODumper.exe' '${{ env.VERSION_FILENAME }}'
 
         $masterPath = 'master.json'
         $isUpdated = Test-Path $masterPath
@@ -44,9 +44,9 @@ jobs:
 
           $versionJson = (Get-Content ${{ env.VERSION_FILENAME }}) | ConvertFrom-Json
           $dateVer = $versionJson.dateVer;
-          $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer +9*3600)
+          $updatedAt = (Get-Date '01-01-1970 00:00:00').AddSeconds($dateVer+9*3600)
           $updatedAt = Get-Date $updatedAt -UFormat '%B %d, %Y %R'
-          echo "::set-output name=ver::${dateVer}";
+          echo "::set-output name=dateVer::${dateVer}";
           echo "::set-output name=updatedAt::${updatedAt}";
         }
       shell: powershell
@@ -58,8 +58,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.product.outputs.ver }}
-        release_name: MasterData ${{ steps.product.outputs.ver }}
+        tag_name: ${{ steps.product.outputs.dateVer }}
+        release_name: MasterData ${{ steps.product.outputs.dateVer }}
         body: |
           Updated on ${{ steps.product.outputs.updatedAt }} UTC+9
         draft: false
@@ -75,3 +75,11 @@ jobs:
         asset_path: ${{ env.MASTER_FILENAME }}
         asset_name: ${{ env.MASTER_FILENAME }}
         asset_content_type: application/zip
+
+    - name: Upload game data version gist
+      if: steps.product.outputs.isUpdated == 'True'
+      uses: andymckay/append-gist-action@master
+      with:
+        gistURL: "https://gist.github.com/karanokk/${{ env.VERSION_FILE_GIST_ID }}"
+        token: ${{ secrets.GIST_PAT }}
+        file: ${{ env.VERSION_FILENAME }}
